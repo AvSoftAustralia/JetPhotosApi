@@ -8,11 +8,11 @@ func (app *application) routes() *http.ServeMux {
 	fileServer := http.FileServer(http.Dir("./ui/static"))
 	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
 
-	mux.HandleFunc("/", app.home)
+	// mux.HandleFunc("/", app.home)
 	mux.HandleFunc("/api", app.api)
-	mux.HandleFunc("/aircraft", app.aircraftSearch)
-	mux.HandleFunc("/documentation", app.documentation)
-	mux.HandleFunc("/querybuilder", app.queryBuilder)
+	// mux.HandleFunc("/aircraft", app.aircraftSearch)
+	// mux.HandleFunc("/documentation", app.documentation)
+	// mux.HandleFunc("/querybuilder", app.queryBuilder)
 
 	return mux
 }
