@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/macsencasaus/jetapi/internal/scraper"
 )
@@ -61,9 +63,13 @@ func (app *application) api(w http.ResponseWriter, r *http.Request) {
 
 	jsonData, err := scraper.GetJSONData(q)
 	if err != nil {
-		app.serverError(w, err)
-		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
-		return
+		if strings.HasPrefix(err.Error(), "partial result") {
+			fmt.Printf("⚠️ Partial data returned:", err)
+		} else {
+			app.serverError(w, err)
+			http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

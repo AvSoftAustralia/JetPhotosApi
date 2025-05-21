@@ -3,6 +3,7 @@ package scraper
 import (
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type jetPhotosInfo struct {
@@ -75,75 +76,81 @@ func getJetPhotosStruct(q *Queries, done chan jetPhotosRes) {
 	var registration string
 	images := make([]imagesStruct, imgs)
 
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for i, link := range pageLinks {
-		photoURL := fmt.Sprintf("%s%s", jpHomeURL, link)
-		images[i].Link = photoURL
-		images[i].Thumbnail = "https:" + thumbnails[i]
+		wg.Add(1)
+		go func(i int, link string) {
+			defer wg.Done()
 
-		b, err := fetchHTML(photoURL)
-		if err != nil {
-			result := jetPhotosRes{Res: nil, Err: err}
-			done <- result
-			return
-		}
+			photoURL := fmt.Sprintf("%s%s", jpHomeURL, link)
+			img := imagesStruct{
+				Link:      photoURL,
+				Thumbnail: "https:" + thumbnails[i],
+			}
 
-		s := newScraper(b)
+			b, err := fetchHTML(photoURL)
+			if err != nil {
+				fmt.Printf("⚠️ Failed to fetch photo page for %s: %v\n", link, err)
+				mu.Lock()
+				images[i] = img
+				mu.Unlock()
+				return
+			}
 
-		// photo links
-		photoLinkArr, err := s.fetchLinks("img", "large-photo__img", 1)
-		if err != nil {
-			result := jetPhotosRes{Res: nil, Err: err}
-			done <- result
-			return
-		}
-		images[i].Image = photoLinkArr[0]
+			s := newScraper(b)
 
-		// registration
-		res, err := s.fetchText("h4", "headerText4 color-shark", 3)
-		if err != nil {
-			result := jetPhotosRes{Res: nil, Err: err}
-			done <- result
-			return
-		}
-		registration = res[0]
-		images[i].DateTaken = res[1]
-		images[i].DateUploaded = res[2]
+			if photoLinkArr, err := s.fetchLinks("img", "large-photo__img", 1); err == nil && len(photoLinkArr) > 0 {
+				img.Image = photoLinkArr[0]
+			}
 
-		s.advance("h2", "header-reset", 1)
+			if regText, err := s.fetchText("h4", "headerText4 color-shark", 3); err == nil {
+				if len(regText) > 0 {
+					mu.Lock()
+					registration = regText[0]
+					mu.Unlock()
+				}
+				if len(regText) > 1 {
+					img.DateTaken = regText[1]
+				}
+				if len(regText) > 2 {
+					img.DateUploaded = regText[2]
+				}
+			}
 
-		aircraft := &aircraftStruct{}
-		res, err = s.fetchText("a", "link", 3)
-		if err != nil {
-			result := jetPhotosRes{Res: nil, Err: err}
-			done <- result
-			return
-		}
-		aircraft.Aircraft = res[0]
-		aircraft.Airline = res[1]
-		aircraft.Serial = strings.TrimSpace(res[2])
-		images[i].Aircraft = aircraft
+			s.advance("h2", "header-reset", 1)
+			aircraft := &aircraftStruct{}
+			if aircraftText, err := s.fetchText("a", "link", 3); err == nil {
+				if len(aircraftText) > 0 {
+					aircraft.Aircraft = aircraftText[0]
+				}
+				if len(aircraftText) > 1 {
+					aircraft.Airline = aircraftText[1]
+				}
+				if len(aircraftText) > 2 {
+					aircraft.Serial = strings.TrimSpace(aircraftText[2])
+				}
+				img.Aircraft = aircraft
+			}
 
-		// location
-		s.advance("h5", "header-reset", 1)
-		location, err := s.fetchText("a", "link", 1)
-		if err != nil {
-			result := jetPhotosRes{Res: nil, Err: err}
-			done <- result
-			return
-		}
-		images[i].Location = location[0]
+			s.advance("h5", "header-reset", 1)
+			if location, err := s.fetchText("a", "link", 1); err == nil && len(location) > 0 {
+				img.Location = location[0]
+			}
 
-		// photographer
-		photographer, err := s.fetchText("h6", "header-reset", 1)
-		if err != nil {
-			result := jetPhotosRes{Res: nil, Err: err}
-			done <- result
-			return
-		}
-		images[i].Photographer = photographer[0]
+			if photographer, err := s.fetchText("h6", "header-reset", 1); err == nil && len(photographer) > 0 {
+				img.Photographer = photographer[0]
+			}
 
-		s.close()
+			s.close()
+
+			mu.Lock()
+			images[i] = img
+			mu.Unlock()
+		}(i, link)
 	}
+	wg.Wait()
 
 	j := &jetPhotosInfo{
 		Images: images,

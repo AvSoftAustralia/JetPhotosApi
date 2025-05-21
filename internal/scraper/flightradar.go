@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 )
 
 type flightInfo struct {
@@ -108,15 +109,25 @@ func getFlightRadarStruct(q *Queries, done chan flightRadarRes) {
 		return
 	}
 
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for i := 0; i < q.Flights; i++ {
-		flight, err := getFlight(s)
-		if err != nil {
-			if err.Error() == "query not found" {
-				break
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			flight, err := getFlight(s)
+			if err != nil {
+				if err.Error() == "query not found" {
+					return
+				}
 			}
-		}
-		flights = append(flights, flight)
+			mu.Lock()
+			flights = append(flights, flight)
+			mu.Unlock()
+		}()
 	}
+	wg.Wait()
 	fr.Flights = flights
 
 	result := flightRadarRes{Res: fr, Err: nil}

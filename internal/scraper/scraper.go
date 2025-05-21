@@ -64,11 +64,14 @@ func GetJetInfo(q *Queries) (*JetInfo, error) {
 	jp := <-donejp
 	fr := <-donefr
 
-	if jp.Err != nil {
-		return nil, jp.Err
-	}
-	if fr.Err != nil {
-		return nil, fr.Err
+	if jp.Res == nil && fr.Res == nil {
+		if jp.Err != nil {
+			return nil, jp.Err
+		}
+		if fr.Err != nil {
+			return nil, fr.Err
+		}
+		return nil, fmt.Errorf("no data found")
 	}
 
 	j := &JetInfo{JetPhotos: jp.Res, FlightRadar: fr.Res}
@@ -117,11 +120,16 @@ func (s *scraper) fetchText(startTag, class string, quantity int) ([]string, err
 	if err != nil {
 		return nil, err
 	}
-	if len(tokens) != quantity {
-		return nil, fmt.Errorf("text not found")
+	if len(tokens) < quantity {
+		data := make([]string, len(tokens))
+		for i := range tokens {
+			data[i] = tokens[i].Data
+		}
+
+		return data, fmt.Errorf("partial result: expected %d, got %d", quantity, len(tokens))
 	}
 	data := make([]string, len(tokens))
-	for i := 0; i < quantity; i++ {
+	for i := range tokens {
 		data[i] = tokens[i].Data
 	}
 	return data, nil
@@ -154,7 +162,7 @@ func (s *scraper) fetchNextTokens(
 				return nil, fmt.Errorf("query not found")
 			}
 			return nil, fmt.Errorf("error tokenizing html %v", s.tokenizer.Err())
-		}
+		}	
 
 		if tokenType != html.StartTagToken {
 			continue
