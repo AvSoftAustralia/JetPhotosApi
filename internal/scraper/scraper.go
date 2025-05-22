@@ -39,7 +39,8 @@ func GetJSONData(q *Queries) ([]byte, error) {
 
 func GetJetInfo(q *Queries) (*JetInfo, error) {
 	donejp := make(chan jetPhotosRes)
-	donefr := make(chan flightRadarRes)
+	// donefr := make(chan flightRadarRes)
+
 
 	var wg sync.WaitGroup
 
@@ -49,32 +50,40 @@ func GetJetInfo(q *Queries) (*JetInfo, error) {
 		getJetPhotosStruct(q, donejp)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		getFlightRadarStruct(q, donefr)
-	}()
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
+	// 	getFlightRadarStruct(q, donefr)
+	// }()
 
 	go func() {
 		wg.Wait()
 		close(donejp)
-		close(donefr)
+		// close(donefr)
 	}()
 
 	jp := <-donejp
-	fr := <-donefr
+	// fr := <-donefr
 
-	if jp.Res == nil && fr.Res == nil {
+
+	// if jp.Res == nil && fr.Res == nil {
+	// 	if jp.Err != nil {
+	// 		return nil, jp.Err
+	// 	}
+	// 	if fr.Err != nil {
+	// 		return nil, fr.Err
+	// 	}
+	// 	return nil, fmt.Errorf("no data found")
+	// }
+	if jp.Res == nil {
 		if jp.Err != nil {
 			return nil, jp.Err
 		}
-		if fr.Err != nil {
-			return nil, fr.Err
-		}
-		return nil, fmt.Errorf("no data found")
+		return nil, fmt.Errorf("no JetPhotos data found")
 	}
 
-	j := &JetInfo{JetPhotos: jp.Res, FlightRadar: fr.Res}
+	// j := &JetInfo{JetPhotos: jp.Res, FlightRadar: fr.Res}
+	j := &JetInfo{JetPhotos: jp.Res}
 	return j, nil
 }
 
